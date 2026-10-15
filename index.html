@@ -1,24 +1,589 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RETRO CHESS ARCADE</title>
+    <!-- Tailwind CSS for modern responsive utility styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for Retro arcade font -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+    <!-- FontAwesome for retro icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Chess.js for robust chess logic and rule validation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    
+    <style>
+        /* Custom retro styling, CRT scanlines, and glow effects */
+        body {
+            font-family: 'Share Tech Mono', monospace;
+            background-color: #0b0f19;
+            color: #38ef7d;
+            overflow-x: hidden;
+        }
 
-RETRO CHESS 198X
-Two Player Series Combat Station
-SERIES SCORE
-P1 (White): 0
-P2 (Black): 0
-Reset Series
-GRAVEYARD
-White Losses:
+        .pixel-font {
+            font-family: 'Press Start 2P', monospace;
+        }
 
-Black Losses:
+        /* CRT Scanline overlay */
+        .crt::after {
+            content: " ";
+            display: block;
+            position: fixed;
+            top: 0; left: 0; bottom: 0; right: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            z-index: 99999;
+            background-size: 100% 3px, 3px 100%;
+            pointer-events: none;
+        }
 
+        /* Retro Bevel Borders & Glows */
+        .arcade-box {
+            background: #141c2e;
+            border: 4px solid #1f293d;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.8), 0 0 15px rgba(56, 239, 125, 0.15);
+        }
 
-WHITE'S TURN
+        .arcade-button {
+            font-family: 'Press Start 2P', monospace;
+            background: linear-gradient(to bottom, #1f293d, #0f172a);
+            border: 2px solid #38ef7d;
+            color: #38ef7d;
+            box-shadow: 0 4px 0 #111b2e, 0 0 10px rgba(56, 239, 125, 0.3);
+            transition: all 0.1s ease;
+        }
+        .arcade-button:hover {
+            background: linear-gradient(to bottom, #2d3748, #1a202c);
+            box-shadow: 0 2px 0 #111b2e, 0 0 15px rgba(56, 239, 125, 0.6);
+            transform: translateY(2px);
+        }
+        .arcade-button:active {
+            box-shadow: 0 0 0 #111b2e;
+            transform: translateY(4px);
+        }
 
+        /* Chess board custom retro squares */
+        .sq-light {
+            background-color: #d8b4fe;
+            color: #2e1065;
+        }
+        .sq-dark {
+            background-color: #7c3aed;
+            color: #f3e8ff;
+        }
+        .sq-selected {
+            background-color: #fbbf24 !important;
+            box-shadow: inset 0 0 10px #d97706;
+        }
+        .sq-highlight::after {
+            content: '';
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            background-color: rgba(56, 239, 125, 0.6);
+            border-radius: 50%;
+            box-shadow: 0 0 8px #38ef7d;
+        }
+        .sq-capture::after {
+            content: '';
+            position: absolute;
+            inset: 4px;
+            border: 4px dashed #ef4444;
+            border-radius: 4px;
+            box-shadow: 0 0 8px #ef4444;
+        }
 
-Undo New Game Audio: ON
-MOVE LOG
-// System Initialized...
-// Ready for Player 1 & Player 2
-GAME OVER
+        /* Custom scrollbar for terminal logs */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0b0f19;
+            border-left: 2px solid #1f293d;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #38ef7d;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="crt min-h-screen flex flex-col items-center justify-between p-3 sm:p-6">
 
-CONTINUE
-RETRO CHESS ARCADE v1.0 • TWO PLAYER LOCAL BATTLE
+    <!-- Header Arcade Title -->
+    <header class="w-full max-w-6xl text-center my-2 sm:my-4">
+        <div class="inline-block px-4 py-2 border-2 border-[#38ef7d] bg-[#141c2e] shadow-[0_0_20px_rgba(56,239,125,0.3)] rounded-lg">
+            <h1 class="pixel-font text-xl sm:text-3xl text-[#38ef7d] tracking-wider drop-shadow-[2px_2px_#000]">
+                <i class="fa-solid fa-chess-rook mr-2"></i>RETRO CHESS 198X
+            </h1>
+            <p class="text-xs sm:text-sm text-cyan-400 mt-1 tracking-widest uppercase">Two Player Series Combat Station</p>
+        </div>
+    </header>
+
+    <!-- Main Game Arena -->
+    <main class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-4 sm:gap-6 my-auto">
+
+        <!-- Left Column: Player Status & Graveyard -->
+        <div class="lg:col-span-3 flex flex-col gap-4">
+            <!-- Series Tracker Box -->
+            <div class="arcade-box p-4 rounded-lg">
+                <h2 class="pixel-font text-xs text-yellow-400 mb-3 border-b border-gray-700 pb-2">
+                    <i class="fa-solid fa-trophy mr-1"></i> SERIES SCORE
+                </h2>
+                <div class="flex justify-between items-center mb-2 bg-[#0b0f19] p-2 rounded border border-gray-800">
+                    <span class="text-sm font-bold text-cyan-300">P1 (White):</span>
+                    <span id="p1-score" class="pixel-font text-base text-white bg-gray-800 px-2 py-1 rounded">0</span>
+                </div>
+                <div class="flex justify-between items-center mb-3 bg-[#0b0f19] p-2 rounded border border-gray-800">
+                    <span class="text-sm font-bold text-pink-400">P2 (Black):</span>
+                    <span id="p2-score" class="pixel-font text-base text-white bg-gray-800 px-2 py-1 rounded">0</span>
+                </div>
+                <button onclick="resetSeries()" class="arcade-button w-full py-2 text-[10px] rounded uppercase tracking-wider">
+                    Reset Series
+                </button>
+            </div>
+
+            <!-- Graveyard: Captured Pieces -->
+            <div class="arcade-box p-4 rounded-lg flex-1 flex flex-col">
+                <h2 class="pixel-font text-xs text-cyan-400 mb-3 border-b border-gray-700 pb-2">
+                    <i class="fa-solid fa-skull mr-1"></i> GRAVEYARD
+                </h2>
+                <div class="mb-3">
+                    <span class="text-xs text-gray-400 block mb-1">White Losses:</span>
+                    <div id="white-graveyard" class="min-h-[40px] bg-[#0b0f19] p-2 rounded border border-gray-800 flex flex-wrap gap-1 text-xl"></div>
+                </div>
+                <div>
+                    <span class="text-xs text-gray-400 block mb-1">Black Losses:</span>
+                    <div id="black-graveyard" class="min-h-[40px] bg-[#0b0f19] p-2 rounded border border-gray-800 flex flex-wrap gap-1 text-xl"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Center Column: The Chess Board & Turn Indicator -->
+        <div class="lg:col-span-6 flex flex-col items-center justify-center">
+            <!-- Turn & Game Status Banner -->
+            <div class="w-full max-w-[480px] arcade-box px-4 py-3 rounded-lg mb-3 flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                    <div id="turn-indicator" class="w-4 h-4 rounded-full bg-white animate-pulse border border-black"></div>
+                    <span id="turn-text" class="pixel-font text-xs text-white">WHITE'S TURN</span>
+                </div>
+                <div id="status-badge" class="pixel-font text-[10px] text-yellow-400 uppercase"></div>
+            </div>
+
+            <!-- Chessboard Container -->
+            <div class="relative p-2 arcade-box rounded-lg inline-block">
+                <div id="chessboard" class="grid grid-cols-8 w-[320px] h-[320px] sm:w-[440px] sm:h-[440px] border-4 border-[#0b0f19] shadow-2xl select-none">
+                    <!-- Dynamic squares rendered via JavaScript -->
+                </div>
+            </div>
+
+            <!-- Control Buttons -->
+            <div class="w-full max-w-[480px] grid grid-cols-3 gap-2 mt-4">
+                <button onclick="undoMove()" class="arcade-button py-3 text-[10px] rounded uppercase flex items-center justify-center gap-1">
+                    <i class="fa-solid fa-rotate-left"></i> Undo
+                </button>
+                <button onclick="newGame()" class="arcade-button py-3 text-[10px] rounded uppercase flex items-center justify-center gap-1">
+                    <i class="fa-solid fa-chess-board"></i> New Game
+                </button>
+                <button onclick="toggleSound()" id="sound-btn" class="arcade-button py-3 text-[10px] rounded uppercase flex items-center justify-center gap-1">
+                    <i class="fa-solid fa-volume-high"></i> Audio: ON
+                </button>
+            </div>
+        </div>
+
+        <!-- Right Column: Retro Terminal Move History Log -->
+        <div class="lg:col-span-3 flex flex-col">
+            <div class="arcade-box p-4 rounded-lg flex-1 flex flex-col h-[380px] lg:h-full">
+                <h2 class="pixel-font text-xs text-green-400 mb-3 border-b border-gray-700 pb-2">
+                    <i class="fa-solid fa-terminal mr-1"></i> MOVE LOG
+                </h2>
+                <div id="move-history" class="flex-1 bg-[#0b0f19] p-3 rounded border border-gray-800 overflow-y-auto text-xs space-y-1 font-mono text-green-400">
+                    <div class="text-gray-500 italic">// System Initialized...</div>
+                    <div class="text-gray-500 italic">// Ready for Player 1 & Player 2</div>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Retro Message Modal (Instead of alert()) -->
+    <div id="custom-modal" class="fixed inset-0 bg-black bg-opacity-80 z-50 hidden flex items-center justify-center p-4">
+        <div class="arcade-box max-w-md w-full p-6 rounded-lg text-center bg-[#141c2e] border-4 border-[#38ef7d]">
+            <div class="pixel-font text-yellow-400 text-base mb-4" id="modal-title">GAME OVER</div>
+            <p id="modal-message" class="text-sm text-gray-300 mb-6 leading-relaxed"></p>
+            <button onclick="closeModal()" class="arcade-button px-6 py-3 text-xs rounded uppercase">CONTINUE</button>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="w-full text-center text-xs text-gray-500 mt-4">
+        RETRO CHESS ARCADE v1.0 &bull; TWO PLAYER LOCAL BATTLE
+    </footer>
+
+    <!-- Game Logic & Sound Engine Script -->
+    <script>
+        // Initialize Chess Engine
+        const chess = new Chess();
+        
+        // Series Scores
+        let scores = { p1: 0, p2: 0 };
+        
+        // UI State
+        let selectedSquare = null;
+        let validMoves = [];
+        let soundEnabled = true;
+
+        // Unicode mappings for Retro Chess pieces
+        const pieceSymbols = {
+            p: '♟', r: '♜', n: '♞', b: '♝', q: '♛', k: '♚',
+            P: '♙', R: '♖', N: '♘', B: '♗', Q: '♕', K: '♔'
+        };
+
+        // Web Audio API Sound Synthesizer
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(type) {
+            if (!soundEnabled) return;
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            
+            const now = audioCtx.currentTime;
+
+            if (type === 'move') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(440, now);
+                osc.frequency.exponentialRampToValueAtTime(220, now + 0.08);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+                osc.start(now);
+                osc.stop(now + 0.08);
+            } else if (type === 'capture') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.linearRampToValueAtTime(80, now + 0.15);
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now);
+                osc.stop(now + 0.15);
+            } else if (type === 'check') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(587.33, now); // D5
+                osc.frequency.setValueAtTime(880, now + 0.1); // A5
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now);
+                osc.stop(now + 0.3);
+            } else if (type === 'victory') {
+                // Victory arcade chime sequence
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, index) => {
+                    const subOsc = audioCtx.createOscillator();
+                    const subGain = audioCtx.createGain();
+                    subOsc.connect(subGain);
+                    subGain.connect(audioCtx.destination);
+                    subOsc.type = 'square';
+                    subOsc.frequency.setValueAtTime(freq, now + (index * 0.12));
+                    subGain.gain.setValueAtTime(0.12, now + (index * 0.12));
+                    subGain.gain.exponentialRampToValueAtTime(0.01, now + (index * 0.12) + 0.2);
+                    subOsc.start(now + (index * 0.12));
+                    subOsc.stop(now + (index * 0.12) + 0.2);
+                });
+            }
+        }
+
+        // Toggle Sound State
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('sound-btn');
+            btn.innerHTML = soundEnabled ? '<i class="fa-solid fa-volume-high"></i> Audio: ON' : '<i class="fa-solid fa-volume-xmark"></i> Audio: OFF';
+        }
+
+        // Render Chessboard UI
+        function renderBoard() {
+            const boardEl = document.getElementById('chessboard');
+            boardEl.innerHTML = '';
+            
+            const boardState = chess.board();
+            
+            for (let r = 0; r < 8; r++) {
+                for (let c = 0; c < 8; c++) {
+                    const squareId = String.fromCharCode(97 + c) + (8 - r);
+                    const piece = boardState[r][c];
+                    
+                    const squareDiv = document.createElement('div');
+                    squareDiv.className = `relative flex items-center justify-center text-3xl sm:text-4xl font-bold cursor-pointer transition-colors duration-150 select-none ${(r + c) % 2 === 0 ? 'sq-light' : 'sq-dark'}`;
+                    squareDiv.dataset.square = squareId;
+
+                    // Highlight selected square
+                    if (selectedSquare === squareId) {
+                        squareDiv.classList.add('sq-selected');
+                    }
+
+                    // Highlight valid move target squares
+                    const moveMatch = validMoves.find(m => m.to === squareId);
+                    if (moveMatch) {
+                        if (piece) {
+                            squareDiv.classList.add('sq-capture');
+                        } else {
+                            squareDiv.classList.add('sq-highlight');
+                        }
+                    }
+
+                    // Render Piece with proper color
+                    if (piece) {
+                        const pieceSpan = document.createElement('span');
+                        pieceSpan.className = piece.color === 'w' ? 'text-white drop-shadow-[0_2px_2px_rgba(0,0,0,0.8)]' : 'text-gray-900 drop-shadow-[0_1px_1px_rgba(255,255,255,0.3)]';
+                        pieceSpan.innerText = pieceSymbols[piece.color === 'w' ? piece.type.toUpperCase() : piece.type];
+                        squareDiv.appendChild(pieceSpan);
+                    }
+
+                    // Add click event listener
+                    squareDiv.addEventListener('click', () => handleSquareClick(squareId));
+                    boardEl.appendChild(squareDiv);
+                }
+            }
+
+            updateStatusUI();
+            updateGraveyards();
+        }
+
+        // Handle square clicks for piece selection and movement
+        function handleSquareClick(squareId) {
+            const piece = chess.get(squareId);
+
+            if (selectedSquare === null) {
+                // Select piece if it belongs to current turn player
+                if (piece && piece.color === chess.turn()) {
+                    selectedSquare = squareId;
+                    validMoves = chess.moves({ square: squareId, verbose: true });
+                    renderBoard();
+                }
+            } else {
+                if (selectedSquare === squareId) {
+                    // Deselect if clicked again
+                    selectedSquare = null;
+                    validMoves = [];
+                    renderBoard();
+                    return;
+                }
+
+                // Check if target is a valid move
+                const moveObj = validMoves.find(m => m.to === squareId);
+                if (moveObj) {
+                    executeMove(moveObj);
+                } else if (piece && piece.color === chess.turn()) {
+                    // Switch selection to another piece of same color
+                    selectedSquare = squareId;
+                    validMoves = chess.moves({ square: squareId, verbose: true });
+                    renderBoard();
+                } else {
+                    // Invalid move target, clear selection
+                    selectedSquare = null;
+                    validMoves = [];
+                    renderBoard();
+                }
+            }
+        }
+
+        // Execute validated move
+        function executeMove(moveObj) {
+            const isCapture = chess.get(moveObj.to) !== null;
+            const result = chess.move(moveObj);
+            
+            if (result) {
+                selectedSquare = null;
+                validMoves = [];
+
+                // Audio feedback
+                if (chess.in_checkmate()) {
+                    playSound('victory');
+                } else if (chess.in_check()) {
+                    playSound('check');
+                } else if (isCapture || result.captured) {
+                    playSound('capture');
+                } else {
+                    playSound('move');
+                }
+
+                appendMoveLog(result);
+                renderBoard();
+
+                // Check game over conditions
+                if (chess.in_checkmate()) {
+                    const winner = chess.turn() === 'w' ? 'Black (Player 2)' : 'White (Player 1)';
+                    if (chess.turn() === 'w') {
+                        scores.p2++;
+                    } else {
+                        scores.p1++;
+                    }
+                    updateScoresDisplay();
+                    showModal("CHECKMATE!", `${winner} triumphs in this battle! Series score updated.`);
+                } else if (chess.in_draw() || chess.in_stalemate()) {
+                    showModal("GAME DRAW", "The match ended in a stalemate/draw.");
+                }
+            }
+        }
+
+        // Update Turn & Status UI indicators
+        function updateStatusUI() {
+            const turnIndicator = document.getElementById('turn-indicator');
+            const turnText = document.getElementById('turn-text');
+            const statusBadge = document.getElementById('status-badge');
+
+            if (chess.turn() === 'w') {
+                turnIndicator.className = 'w-4 h-4 rounded-full bg-white animate-pulse border border-black';
+                turnText.innerText = "WHITE'S TURN (P1)";
+            } else {
+                turnIndicator.className = 'w-4 h-4 rounded-full bg-gray-900 animate-pulse border border-gray-400';
+                turnText.innerText = "BLACK'S TURN (P2)";
+            }
+
+            if (chess.in_checkmate()) {
+                statusBadge.innerText = "CHECKMATE";
+            } else if (chess.in_check()) {
+                statusBadge.innerText = "CHECK!";
+            } else if (chess.in_draw()) {
+                statusBadge.innerText = "DRAW";
+            } else {
+                statusBadge.innerText = "";
+            }
+        }
+
+        // Update Graveyard (Captured pieces display)
+        function updateGraveyards() {
+            const history = chess.history({ verbose: true });
+            let whiteLosses = [];
+            let blackLosses = [];
+
+            // Standard starting count for pieces
+            const initialPieces = { p: 8, r: 2, n: 2, b: 2, q: 1 };
+            let currentWhite = { p: 0, r: 0, n: 0, b: 0, q: 0 };
+            let currentBlack = { p: 0, r: 0, n: 0, b: 0, q: 0 };
+
+            history.forEach(move => {
+                if (move.captured) {
+                    if (move.color === 'w') {
+                        currentBlack[move.captured]++;
+                    } else {
+                        currentWhite[move.captured]++;
+                    }
+                }
+            });
+
+            const whiteGraveyardEl = document.getElementById('white-graveyard');
+            const blackGraveyardEl = document.getElementById('black-graveyard');
+            
+            whiteGraveyardEl.innerHTML = '';
+            blackGraveyardEl.innerHTML = '';
+
+            // Render captured black pieces (losses of black)
+            for (let type in currentBlack) {
+                for (let i = 0; i < currentBlack[type]; i++) {
+                    const span = document.createElement('span');
+                    span.className = 'text-gray-900';
+                    span.innerText = pieceSymbols[type];
+                    blackGraveyardEl.appendChild(span);
+                }
+            }
+
+            // Render captured white pieces (losses of white)
+            for (let type in currentWhite) {
+                for (let i = 0; i < currentWhite[type]; i++) {
+                    const span = document.createElement('span');
+                    span.className = 'text-white';
+                    span.innerText = pieceSymbols[type.toUpperCase()];
+                    whiteGraveyardEl.appendChild(span);
+                }
+            }
+        }
+
+        // Append move to retro terminal log
+        function appendMoveLog(move) {
+            const logContainer = document.getElementById('move-history');
+            const moveCount = Math.ceil(chess.history().length / 2);
+            const moveEntry = document.createElement('div');
+            
+            if (chess.turn() === 'b') {
+                moveEntry.innerHTML = `<span class="text-gray-500">${moveCount}.</span> <span class="text-white">${move.san}</span>`;
+            } else {
+                // Previous black move completion or white log
+                const lastLog = logContainer.lastElementChild;
+                if (lastLog && !lastLog.dataset.completed) {
+                    lastLog.innerHTML += ` <span class="text-gray-400">${move.san}</span>`;
+                    lastLog.dataset.completed = "true";
+                    logContainer.scrollTop = logContainer.scrollHeight;
+                    return;
+                } else {
+                    moveEntry.innerHTML = `<span class="text-gray-500">${moveCount}...</span> <span class="text-gray-300">${move.san}</span>`;
+                }
+            }
+            logContainer.appendChild(moveEntry);
+            logContainer.scrollTop = logContainer.scrollHeight;
+        }
+
+        // Undo Move function
+        function undoMove() {
+            const undone = chess.undo();
+            if (undone) {
+                selectedSquare = null;
+                validMoves = [];
+                // Remove last entry from terminal log
+                const logContainer = document.getElementById('move-history');
+                if (logContainer.children.length > 2) {
+                    logContainer.removeChild(logContainer.lastChild);
+                }
+                renderBoard();
+                playSound('move');
+            }
+        }
+
+        // New Game function
+        function newGame() {
+            chess.reset();
+            selectedSquare = null;
+            validMoves = [];
+            document.getElementById('move-history').innerHTML = `
+                <div class="text-gray-500 italic">// System Initialized...</div>
+                <div class="text-gray-500 italic">// New Match Started</div>
+            `;
+            renderBoard();
+        }
+
+        // Series Score management
+        function updateScoresDisplay() {
+            document.getElementById('p1-score').innerText = scores.p1;
+            document.getElementById('p2-score').innerText = scores.p2;
+        }
+
+        function resetSeries() {
+            scores = { p1: 0, p2: 0 };
+            updateScoresDisplay();
+            newGame();
+        }
+
+        // Custom Modal handlers (replacement for alert())
+        function showModal(title, message) {
+            document.getElementById('modal-title').innerText = title;
+            document.getElementById('modal-message').innerText = message;
+            document.getElementById('custom-modal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('custom-modal').classList.add('hidden');
+            newGame();
+        }
+
+        // Initial render on load
+        window.onload = function() {
+            renderBoard();
+            updateScoresDisplay();
+        };
+    </script>
+</body>
+</html>
